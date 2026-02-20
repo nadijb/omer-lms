@@ -73,16 +73,16 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Analytics & Timeline Replay</h1>
+      <h1 className="text-2xl font-bold text-cortex-text mb-6">Analytics & Timeline Replay</h1>
 
       <div className="flex gap-6 h-full">
         {/* User list */}
         <div className="w-56 flex-shrink-0">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3">
-            <div className="text-xs text-gray-400 px-2 mb-2 font-medium uppercase tracking-wider">Learners</div>
+          <div className="bg-cortex-surface border border-cortex-border rounded-xl p-3">
+            <div className="text-xs text-cortex-muted px-2 mb-2 font-medium uppercase tracking-wider">Learners</div>
             {learners.map(l => (
               <button key={l.id} onClick={() => loadUser(l)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition mb-0.5 ${selectedUser?.id === l.id ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition mb-0.5 ${selectedUser?.id === l.id ? 'bg-cortex-accent text-white' : 'text-cortex-text hover:bg-cortex-bg'}`}>
                 <div className="truncate">{l.display_name || l.email}</div>
                 <div className="text-xs opacity-60">{l.learner_type || 'No type'}</div>
               </button>
@@ -93,16 +93,16 @@ export default function AnalyticsPage() {
         {/* Detail panel */}
         <div className="flex-1 space-y-4">
           {!selectedUser ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center text-gray-500">
+            <div className="bg-cortex-surface border border-cortex-border rounded-xl p-12 text-center text-cortex-muted">
               Select a learner to view analytics
             </div>
           ) : !userDetail ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center text-gray-500">Loading...</div>
+            <div className="bg-cortex-surface border border-cortex-border rounded-xl p-12 text-center text-cortex-muted">Loading...</div>
           ) : (
             <>
               {/* User summary */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h2 className="text-white font-semibold mb-3">{userDetail.user?.display_name} — Progress Summary</h2>
+              <div className="bg-cortex-surface border border-cortex-border rounded-xl p-5">
+                <h2 className="text-cortex-text font-semibold mb-3">{userDetail.user?.display_name} — Progress Summary</h2>
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   {[
                     { label: 'Lessons Completed', value: userDetail.progress.filter(p => p.completed).length },
@@ -110,9 +110,9 @@ export default function AnalyticsPage() {
                     { label: 'Total Watch Time', value: `${Math.round(userDetail.progress.reduce((a,p)=>a+(p.total_watch_seconds||0),0)/60)}m` },
                     { label: 'Sessions', value: userDetail.sessions.length },
                   ].map(m => (
-                    <div key={m.label} className="bg-gray-800 rounded-lg p-3 text-center">
-                      <div className="text-xl font-bold text-white">{m.value}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{m.label}</div>
+                    <div key={m.label} className="bg-cortex-bg border border-cortex-border rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-cortex-text">{m.value}</div>
+                      <div className="text-xs text-cortex-muted mt-0.5">{m.label}</div>
                     </div>
                   ))}
                 </div>
@@ -123,11 +123,11 @@ export default function AnalyticsPage() {
                     <div key={p.lesson_id} className="flex items-center gap-3">
                       <div className="flex-1">
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-300">{p.lesson_title}</span>
-                          <span className="text-gray-400">{p.percent_watched}%</span>
+                          <span className="text-cortex-text">{p.lesson_title}</span>
+                          <span className="text-cortex-muted">{p.percent_watched}%</span>
                         </div>
-                        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${p.completed ? 'bg-green-500' : 'bg-blue-500'}`}
+                        <div className="h-1.5 bg-cortex-bg rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${p.completed ? 'bg-green-500' : 'bg-cortex-accent'}`}
                             style={{ width: `${p.percent_watched}%` }} />
                         </div>
                       </div>
@@ -138,33 +138,33 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Sessions list */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h3 className="text-white font-semibold mb-3">Sessions</h3>
+              <div className="bg-cortex-surface border border-cortex-border rounded-xl p-5">
+                <h3 className="text-cortex-text font-semibold mb-3">Sessions</h3>
                 <div className="space-y-1.5">
                   {userDetail.sessions.map(s => (
                     <button key={s.id} onClick={() => loadSession(s)}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition ${selectedSession?.id === s.id ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>
+                      className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition ${selectedSession?.id === s.id ? 'bg-cortex-accent text-white' : 'bg-cortex-bg text-cortex-text hover:bg-cortex-border'}`}>
                       <div className="flex justify-between">
                         <span>{new Date(s.session_started_at).toLocaleString()}</span>
                         <span className="text-xs opacity-70">{s.total_active_seconds}s active</span>
                       </div>
                     </button>
                   ))}
-                  {!userDetail.sessions.length && <div className="text-gray-500 text-sm">No sessions yet</div>}
+                  {!userDetail.sessions.length && <div className="text-cortex-muted text-sm">No sessions yet</div>}
                 </div>
               </div>
 
               {/* Timeline replay */}
               {timeline && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="bg-cortex-surface border border-cortex-border rounded-xl p-5">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-white font-semibold">Session Timeline Replay</h3>
+                    <h3 className="text-cortex-text font-semibold">Session Timeline Replay</h3>
                     <div className="flex items-center gap-3">
-                      <span className="text-gray-400 text-sm">{playhead + 1} / {timeline.events.length}</span>
+                      <span className="text-cortex-muted text-sm">{playhead + 1} / {timeline.events.length}</span>
                       <button onClick={() => { setPlayhead(0); setPlaying(false); }}
-                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs transition">↩ Reset</button>
+                        className="bg-cortex-bg border border-cortex-border hover:bg-cortex-border text-cortex-text px-3 py-1 rounded text-xs transition">↩ Reset</button>
                       <button onClick={() => setPlaying(p => !p)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition">
+                        className="bg-cortex-accent hover:opacity-90 text-white px-3 py-1 rounded text-xs transition">
                         {playing ? '⏸ Pause' : '▶ Play'}
                       </button>
                     </div>
@@ -173,21 +173,21 @@ export default function AnalyticsPage() {
                   {/* Scrubber */}
                   <input type="range" min={0} max={timeline.events.length - 1} value={playhead}
                     onChange={e => setPlayhead(Number(e.target.value))}
-                    className="w-full mb-4 accent-blue-500" />
+                    className="w-full mb-4 accent-cortex-accent" />
 
                   {/* Current event highlight */}
                   {timeline.events[playhead] && (() => {
                     const ev = timeline.events[playhead];
                     const meta = EVENT_LABELS[ev.event_type] || { icon: '•', color: 'gray' };
                     return (
-                      <div className="bg-gray-800 rounded-lg p-3 mb-4 border border-gray-700">
+                      <div className="bg-cortex-bg rounded-lg p-3 mb-4 border border-cortex-border">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">{meta.icon}</span>
-                          <span className="text-white font-medium">{ev.event_type}</span>
-                          <span className="text-gray-400 text-xs ml-auto">{new Date(ev.client_ts).toLocaleTimeString()}</span>
+                          <span className="text-cortex-text font-medium">{ev.event_type}</span>
+                          <span className="text-cortex-muted text-xs ml-auto">{new Date(ev.client_ts).toLocaleTimeString()}</span>
                         </div>
                         {Object.keys(ev.event_payload || {}).length > 0 && (
-                          <pre className="text-xs text-gray-400 mt-2 overflow-x-auto">{JSON.stringify(ev.event_payload, null, 2)}</pre>
+                          <pre className="text-xs text-cortex-muted mt-2 overflow-x-auto">{JSON.stringify(ev.event_payload, null, 2)}</pre>
                         )}
                       </div>
                     );
@@ -198,7 +198,7 @@ export default function AnalyticsPage() {
                     {timeline.events.slice(0, playhead + 1).map((ev, i) => {
                       const meta = EVENT_LABELS[ev.event_type] || { icon: '•' };
                       return (
-                        <div key={i} className={`flex items-center gap-2 text-xs py-1 px-2 rounded ${i === playhead ? 'bg-blue-900/50 text-white' : 'text-gray-500'}`}>
+                        <div key={i} className={`flex items-center gap-2 text-xs py-1 px-2 rounded ${i === playhead ? 'bg-cortex-accent/20 text-cortex-text' : 'text-cortex-muted'}`}>
                           <span>{meta.icon}</span>
                           <span>{ev.event_type}</span>
                           <span className="ml-auto">{new Date(ev.client_ts).toLocaleTimeString()}</span>
