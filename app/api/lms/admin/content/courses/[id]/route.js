@@ -26,15 +26,38 @@ export async function DELETE(request, { params }) {
   const { authError } = await requireRole(request, 'admin', 'training');
   if (authError) return authError;
 
+  const pool = getPool();
+  const client = await pool.connect();
   try {
-    const pool = getPool();
-    const videos = await pool.query(`
-      SELECT l.video_url FROM lms_lessons l
+    await client.query('BEGIN');
+
+    // Collect all lessons in this course
+    const lessonsRes = await client.query(`
+      SELECT l.id, l.video_url FROM lms_lessons l
       JOIN lms_sections s ON l.section_id = s.id
-      WHERE s.course_id = $1 AND l.video_url IS NOT NULL
+      WHERE s.course_id = $1
     `, [params.id]);
-    videos.rows.forEach(r => deleteVideoFile(r.video_url));
-    await pool.query('DELETE FROM lms_courses WHERE id = $1', [params.id]);
+    const lessonIds = lessonsRes.rows.map(r => r.id);
+    const videoUrls = lessonsRes.rows.map(r => r.video_url).filter(Boolean);
+
+    if (lessonIds.length > 0) {
+      await client.query('DELETE FROM lms_event_logs WHERE lesson_id = ANY($1::int[])', [lessonIds]);
+      await client.query('DELETE FROM lms_learning_sessions WHERE lesson_id = ANY($1::int[])', [lessonIds]);
+      await client.query('DELETE FROM lms_lesson_assignments WHERE lesson_id = ANY($1::int[])', [lessonIds]);
+      await client.query('DELETE FROM lms_user_lesson_progress WHERE lesson_id = ANY($1::int[])', [lessonIds]);
+      await client.query('DELETE FROM lms_lessons WHERE id = ANY($1::int[])', [lessonIds]);
+    }
+
+    // Delete child sections before parent sections (self-referencing FK)
+    await client.query('DELETE FROM lms_sections WHERE course_id = $1 AND parent_section_id IS NOT NULL', [params.id]);
+    await client.query('DELETE FROM lms_sections WHERE course_id = $1', [params.id]);
+    await client.query('DELETE FROM lms_courses WHERE id = $1', [params.id]);
+
+    await client.query('COMMIT');
+    videoUrls.forEach(url => deleteVideoFile(url));
     return NextResponse.json({ ok: true });
-  } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  } finally { client.release(); }
 }

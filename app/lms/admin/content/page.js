@@ -112,7 +112,7 @@ export default function ContentPage() {
       if (videoFile) fd.append('video', videoFile);
 
       const url = isEdit ? `/api/lms/admin/content/lessons/${panel.data.id}` : '/api/lms/admin/content/lessons';
-      const r   = await apiUpload(url, fd);
+      const r   = await apiUpload(url, fd, isEdit ? 'PUT' : 'POST');
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
       await loadTree(selectedCourse.id);
