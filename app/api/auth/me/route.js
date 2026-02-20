@@ -1,0 +1,22 @@
+import { NextResponse } from 'next/server';
+import { getPool } from '@/lib/db';
+import { requireAuth } from '@/lib/server-auth';
+
+export async function GET(request) {
+  const { authError, user } = await requireAuth(request);
+  if (authError) return authError;
+
+  const pool = getPool();
+  try {
+    const result = await pool.query(
+      'SELECT id, email, role, display_name, is_active FROM auth_users WHERE id = $1',
+      [user.id]
+    );
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    return NextResponse.json(result.rows[0]);
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
