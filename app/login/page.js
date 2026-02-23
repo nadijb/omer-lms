@@ -1,6 +1,6 @@
 // frontend/app/login/page.js
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
@@ -12,7 +12,8 @@ const GOOGLE_ERROR_MESSAGES = {
   google_error:     'An error occurred during Google sign-in. Please try again.',
 };
 
-export default function LoginPage() {
+// Separated into its own component so useSearchParams is inside Suspense
+function LoginForm() {
   const { user, login, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,7 +22,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Handle query params from Google OAuth callback
   const googleParam = searchParams.get('google');
   const errorParam  = searchParams.get('error');
 
@@ -64,7 +64,7 @@ export default function LoginPage() {
           {googleParam === 'pending' && (
             <div className="mb-4 bg-blue-900/30 border border-blue-700 text-blue-300 rounded-lg px-4 py-3 text-sm">
               <div className="font-medium mb-0.5">Registration request submitted</div>
-              Your Google account has been registered and is pending admin approval. You'll be able to sign in once approved.
+              Your Google account has been registered and is pending admin approval. You&apos;ll be able to sign in once approved.
             </div>
           )}
           {errorParam && GOOGLE_ERROR_MESSAGES[errorParam] && (
@@ -96,7 +96,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-            <label className="block text-sm text-gray-400 mb-1">Username or Email</label>
+              <label className="block text-sm text-gray-400 mb-1">Username or Email</label>
               <input
                 type="text"
                 value={identifier}
@@ -144,13 +144,25 @@ export default function LoginPage() {
   );
 }
 
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="text-gray-400">Loading...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
 function redirectByRole(role, router) {
   switch (role) {
     case 'admin':
     case 'training': router.push('/lms/admin'); break;
     case 'learner':  router.push('/lms/learn'); break;
     case 'support':  router.push('/dashboard'); break;
-    case 'trainer': router.push('/lms/trainer'); break;
+    case 'trainer':  router.push('/lms/trainer'); break;
     default:         router.push('/dashboard');
   }
 }
