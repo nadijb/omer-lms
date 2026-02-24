@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
-import { updateCalendarEvent, deleteCalendarEvent, deleteChatSpace } from '@/lib/google-apis';
+import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-apis';
 
 export async function PUT(request, { params }) {
   const { authError, user } = await requireRole(request, 'admin', 'training');
@@ -48,19 +48,16 @@ export async function DELETE(request, { params }) {
   const pool = getPool();
   try {
     const r = await pool.query(
-      'SELECT google_calendar_event_id, google_chat_space_id FROM lms_physical_sessions WHERE id = $1',
+      'SELECT google_calendar_event_id FROM lms_physical_sessions WHERE id = $1',
       [params.id]
     );
     const session = r.rows[0];
 
     await pool.query('DELETE FROM lms_physical_sessions WHERE id = $1', [params.id]);
 
-    // Clean up Google resources (best effort, don't block)
+    // Clean up Google Calendar event (best effort, don't block)
     if (session?.google_calendar_event_id) {
       deleteCalendarEvent(user.id, session.google_calendar_event_id).catch(console.error);
-    }
-    if (session?.google_chat_space_id) {
-      deleteChatSpace(user.id, session.google_chat_space_id).catch(console.error);
     }
 
     return NextResponse.json({ ok: true });

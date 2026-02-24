@@ -10,10 +10,11 @@ export async function GET(request) {
   try {
     const result = await pool.query(`
       SELECT
-        pe.attendance_status, pe.acknowledged_at,
+        pe.attendance_status, pe.acknowledged_at, pe.last_session_updated_at,
         ps.id AS session_id, ps.title, ps.description,
         ps.scheduled_date, ps.start_time, ps.end_time,
         ps.location, ps.status AS session_status,
+        ps.google_meet_link, ps.google_calendar_link,
         trainer.display_name AS trainer_name, trainer.email AS trainer_email
       FROM lms_physical_enrollments pe
       JOIN lms_physical_sessions ps ON pe.session_id = ps.id

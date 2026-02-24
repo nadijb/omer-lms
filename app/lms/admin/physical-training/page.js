@@ -37,7 +37,8 @@ function PhysicalTrainingInner() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const googleConnected = searchParams.get('google_connected') === '1';
-  const [googleBanner, setGoogleBanner] = useState(googleConnected);
+  const googleError     = searchParams.get('google_error');
+  const [googleBanner, setGoogleBanner] = useState(googleConnected || !!googleError);
   const [sessions, setSessions]         = useState([]);
   const [trainers, setTrainers]         = useState([]);
   const [learnerTypes, setLearnerTypes] = useState([]);
@@ -54,6 +55,8 @@ function PhysicalTrainingInner() {
   const [enrollUserIds, setEnrollUserIds] = useState([]);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+  const [generatingMeet, setGeneratingMeet] = useState(false);
+  const [meetError, setMeetError]           = useState('');
   const [attendSaving, setAttendSaving] = useState({});
 
   // Chat state
@@ -99,6 +102,7 @@ function PhysicalTrainingInner() {
       loadEnrollments(selected.id);
       setActiveTab('attendance');
       setMessages([]);
+      setMeetError('');
       clearInterval(chatPollRef.current);
     }
   }, [selected?.id]);
@@ -155,6 +159,22 @@ function PhysicalTrainingInner() {
     await apiFetch(`/api/lms/admin/physical-sessions/${selected.id}`, { method: 'DELETE' });
     setSelected(null); setEnrollments([]); setModal(null); setSaving(false);
     await loadSessions();
+  };
+
+  const generateMeetLink = async () => {
+    if (!selected) return;
+    setGeneratingMeet(true);
+    setMeetError('');
+    try {
+      const r = await apiFetch(`/api/lms/admin/physical-sessions/${selected.id}/generate-meet`, { method: 'POST', body: '{}' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      await loadSessions();
+    } catch (err) {
+      setMeetError(err.message);
+    } finally {
+      setGeneratingMeet(false);
+    }
   };
 
   const resetSession = async (e) => {
@@ -256,7 +276,7 @@ function PhysicalTrainingInner() {
               <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
               <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
             </svg>
-            Connect Google Calendar &amp; Chat
+            Connect Google Calendar
           </a>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -300,9 +320,16 @@ function PhysicalTrainingInner() {
       {/* ── Detail panel ── */}
       <div className="flex-1 overflow-y-auto p-6">
         {googleBanner && (
-          <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
-            <span>✅ Google Calendar &amp; Chat connected! New sessions will automatically get a Meet link and Chat space.</span>
-            <button onClick={() => setGoogleBanner(false)} className="text-green-600 hover:text-green-800 ml-3 flex-shrink-0">✕</button>
+          <div className={`mb-4 border rounded-xl px-4 py-3 text-sm flex items-center justify-between ${
+            googleError
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400'
+              : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'
+          }`}>
+            {googleError
+              ? <span>❌ Google Calendar connection failed ({googleError}). Check the server logs and try again.</span>
+              : <span>✅ Google Calendar connected! New sessions will automatically get a Meet link and calendar event.</span>
+            }
+            <button onClick={() => setGoogleBanner(false)} className="ml-3 flex-shrink-0 opacity-70 hover:opacity-100">✕</button>
           </div>
         )}
 
@@ -341,9 +368,10 @@ function PhysicalTrainingInner() {
                       Join Google Meet
                     </a>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-cortex-bg border border-cortex-border text-cortex-muted">
-                      No Meet link — connect Google to auto-create
-                    </span>
+                    <button onClick={generateMeetLink} disabled={generatingMeet}
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-cortex-bg border border-cortex-border text-cortex-muted hover:border-green-500 hover:text-green-600 disabled:opacity-50 transition">
+                      {generatingMeet ? '⏳ Generating…' : '📹 Generate Meet Link'}
+                    </button>
                   )}
                   {selected.google_calendar_link && (
                     <a href={selected.google_calendar_link} target="_blank" rel="noopener noreferrer"
@@ -351,14 +379,10 @@ function PhysicalTrainingInner() {
                       📅 View in Calendar
                     </a>
                   )}
-                  {selected.google_chat_link && (
-                    <a href={selected.google_chat_link} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition font-medium shadow-sm">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                      Open Google Chat
-                    </a>
-                  )}
                 </div>
+                {meetError && (
+                  <div className="mt-1 text-xs text-red-500">{meetError}</div>
+                )}
               </div>
 
               {/* Action buttons */}

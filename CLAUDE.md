@@ -1,5 +1,6 @@
-Here is the database schema for the application
+when pushing changes to github, you MUST always use the main branch. do NOT create a seperate feature branch.
 
+Here is the database schema for the application
 
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.

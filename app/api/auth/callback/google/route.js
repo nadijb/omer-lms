@@ -31,6 +31,7 @@ export async function GET(request) {
   // ── Connect flow: just store tokens for existing logged-in user ──────────
   if (state.startsWith('connect:')) {
     const userId = state.replace('connect:', '');
+    console.log('[Google Connect] userId:', userId, 'redirectUri:', redirectUri);
     try {
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method:  'POST',
@@ -44,6 +45,7 @@ export async function GET(request) {
         }),
       });
       const tokens = await tokenRes.json();
+      console.log('[Google Connect] token exchange status:', tokenRes.status, 'has access_token:', !!tokens.access_token, 'error:', tokens.error);
       if (tokenRes.ok && tokens.access_token) {
         const expiry = tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null;
         const pool = getPool();
@@ -56,11 +58,16 @@ export async function GET(request) {
             expiry        = EXCLUDED.expiry,
             updated_at    = NOW()
         `, [userId, tokens.access_token, tokens.refresh_token || null, expiry]);
+        console.log('[Google Connect] tokens saved for userId:', userId);
+        return NextResponse.redirect(`${origin}/lms/admin/physical-training?google_connected=1`);
+      } else {
+        console.error('[Google Connect] token exchange failed:', tokens);
+        return NextResponse.redirect(`${origin}/lms/admin/physical-training?google_error=token_failed`);
       }
     } catch (err) {
-      console.error('Google connect token error:', err);
+      console.error('[Google Connect] exception:', err);
+      return NextResponse.redirect(`${origin}/lms/admin/physical-training?google_error=exception`);
     }
-    return NextResponse.redirect(`${origin}/lms/admin/physical-training?google_connected=1`);
   }
 
   try {

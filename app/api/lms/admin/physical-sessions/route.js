@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
-import { createCalendarEvent, createChatSpace } from '@/lib/google-apis';
+import { createCalendarEvent } from '@/lib/google-apis';
 
 const STATUS_QUERY = `
   CASE
@@ -80,31 +80,21 @@ export async function POST(request) {
 
     const session = result.rows[0];
 
-    // Create Google Calendar event + Chat space in background (don't block the response on failure)
-    const [calResult, chatResult] = await Promise.allSettled([
-      createCalendarEvent(user.id, session),
-      createChatSpace(user.id, title.trim()),
-    ]);
-
-    const cal  = calResult.status  === 'fulfilled' ? calResult.value  : null;
-    const chat = chatResult.status === 'fulfilled' ? chatResult.value : null;
+    // Create Google Calendar event (best effort, don't block on failure)
+    const cal = await createCalendarEvent(user.id, session).catch(() => null);
 
     // Update session with Google links if available
-    if (cal || chat) {
+    if (cal) {
       const updated = await pool.query(`
         UPDATE lms_physical_sessions SET
           google_calendar_event_id = COALESCE($1, google_calendar_event_id),
           google_calendar_link     = COALESCE($2, google_calendar_link),
-          google_meet_link         = COALESCE($3, google_meet_link),
-          google_chat_space_id     = COALESCE($4, google_chat_space_id),
-          google_chat_link         = COALESCE($5, google_chat_link)
-        WHERE id = $6 RETURNING *
+          google_meet_link         = COALESCE($3, google_meet_link)
+        WHERE id = $4 RETURNING *
       `, [
-        cal?.event_id      || null,
-        cal?.calendar_link || null,
-        cal?.meet_link     || null,
-        chat?.space_id     || null,
-        chat?.space_link   || null,
+        cal.event_id      || null,
+        cal.calendar_link || null,
+        cal.meet_link     || null,
         session.id,
       ]);
       return NextResponse.json(updated.rows[0], { status: 201 });
