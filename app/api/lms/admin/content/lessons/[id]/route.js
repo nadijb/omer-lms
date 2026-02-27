@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const contentType = request.headers.get('content-type') || '';
@@ -74,7 +74,7 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();

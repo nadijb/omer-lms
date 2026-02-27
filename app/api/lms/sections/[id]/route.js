@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/server-auth';
 import { deleteVideoFile } from '@/lib/supabase-storage';
 
 export async function PUT(request, { params }) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { title, sort_order } = await request.json();
@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();

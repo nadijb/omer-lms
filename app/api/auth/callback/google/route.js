@@ -4,11 +4,10 @@ import { getPool } from '@/lib/db';
 import { signToken, setAuthCookie } from '@/lib/server-auth';
 
 const ROLE_DESTINATIONS = {
-  admin:    '/lms/admin',
-  training: '/lms/admin',
-  learner:  '/lms/learn',
-  trainer:  '/lms/trainer',
-  support:  '/dashboard',
+  admin:   '/lms/admin',
+  learner: '/lms/learn',
+  trainer: '/lms/trainer',
+  support: '/dashboard',
 };
 
 export async function GET(request) {

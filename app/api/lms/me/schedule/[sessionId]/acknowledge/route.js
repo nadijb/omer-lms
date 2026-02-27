@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function PATCH(request, { params }) {
-  const { authError, user } = await requireRole(request, 'learner', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'admin');
   if (authError) return authError;
 
   const pool = getPool();
@@ -20,7 +20,7 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const { authError, user } = await requireRole(request, 'learner', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'admin');
   if (authError) return authError;
 
   const pool = getPool();

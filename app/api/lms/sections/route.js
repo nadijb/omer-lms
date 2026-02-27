@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function POST(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { course_id, parent_section_id, title, sort_order } = await request.json();

@@ -14,7 +14,7 @@ async function checkAccess(pool, userId, role, sessionId) {
 }
 
 export async function GET(request, { params }) {
-  const { authError, user } = await requireRole(request, 'learner', 'trainer', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'trainer', 'admin');
   if (authError) return authError;
 
   const pool = getPool();
@@ -37,7 +37,7 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
-  const { authError, user } = await requireRole(request, 'learner', 'trainer', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'trainer', 'admin');
   if (authError) return authError;
 
   const pool = getPool();

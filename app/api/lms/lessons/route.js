@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/server-auth';
 import { uploadToSupabase } from '@/lib/supabase-storage';
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const formData = await request.formData();

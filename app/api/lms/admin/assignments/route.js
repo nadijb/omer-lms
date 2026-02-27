@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function GET(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { searchParams } = new URL(request.url);
@@ -29,7 +29,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { learner_type_id, lesson_id } = await request.json();
@@ -79,7 +79,7 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { learner_type_id, lesson_id } = await request.json();

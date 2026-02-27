@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/server-auth';
 import { createCalendarEvent } from '@/lib/google-apis';
 
 export async function POST(request, { params }) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();

@@ -8,7 +8,7 @@ import { requireRole } from '@/lib/server-auth';
 const BUCKET = process.env.SUPABASE_VIDEO_BUCKET || 'lms-videos';
 
 export async function POST(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { filename, contentType } = await request.json();

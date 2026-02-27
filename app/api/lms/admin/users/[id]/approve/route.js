@@ -9,7 +9,7 @@ export async function PUT(request, { params }) {
   const { role, learner_type_id } = await request.json();
   if (!role) return NextResponse.json({ error: 'role required' }, { status: 400 });
 
-  const validRoles = ['admin', 'training', 'trainer', 'learner', 'support'];
+  const validRoles = ['admin', 'trainer', 'learner', 'support'];
   if (!validRoles.includes(role)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
   const pool = getPool();

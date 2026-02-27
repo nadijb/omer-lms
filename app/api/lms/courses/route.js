@@ -23,7 +23,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { title, description } = await request.json();

@@ -4,10 +4,14 @@ import { requireRole } from '@/lib/server-auth';
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-apis';
 
 export async function PUT(request, { params }) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
-  const { title, description, location, trainer_id, scheduled_date, start_time, end_time, max_capacity, status } = await request.json();
+  const body = await request.json();
+  const { title, description, location, scheduled_date, start_time, end_time, status } = body;
+  const trainer_id   = body.trainer_id   || null;
+  const max_capacity = body.max_capacity ? Number(body.max_capacity) : null;
+  const session_mode = body.session_mode || null;
   const pool = getPool();
   try {
     const result = await pool.query(`
@@ -21,11 +25,12 @@ export async function PUT(request, { params }) {
         end_time       = COALESCE($7, end_time),
         max_capacity   = COALESCE($8, max_capacity),
         status         = COALESCE($9, status),
+        session_mode   = COALESCE($11, session_mode),
         updated_at     = NOW()
       WHERE id = $10 RETURNING *
-    `, [title?.trim(), description, location, trainer_id,
-        scheduled_date, start_time, end_time, max_capacity, status,
-        params.id]);
+    `, [title?.trim() || null, description || null, location || null, trainer_id,
+        scheduled_date || null, start_time || null, end_time || null, max_capacity, status || null,
+        params.id, session_mode]);
 
     if (!result.rows[0]) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     const session = result.rows[0];
@@ -42,7 +47,7 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();

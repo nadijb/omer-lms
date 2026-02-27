@@ -24,12 +24,134 @@ const needsAck = (s) =>
   !s.acknowledged_at ||
   (s.last_session_updated_at && new Date(s.acknowledged_at) < new Date(s.last_session_updated_at));
 
+// ─── Star Rating Component ────────────────────────────────────────────────────
+function StarRating({ value, onChange, size = 24 }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1,2,3,4,5].map(star => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          onMouseEnter={() => setHover(star)}
+          onMouseLeave={() => setHover(0)}
+          className="transition-transform hover:scale-110"
+        >
+          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <polygon
+              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+              fill={(hover || value) >= star ? '#f59e0b' : 'none'}
+              stroke={(hover || value) >= star ? '#f59e0b' : 'currentColor'}
+              className={(hover || value) >= star ? '' : 'text-cortex-border'}
+            />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Feedback Modal ───────────────────────────────────────────────────────────
+function FeedbackModal({ session, onClose, onSubmitted }) {
+  const [rating, setRating]   = useState(0);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+
+  const submit = async () => {
+    if (!rating) { setError('Please select a rating.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const r = await apiFetch('/api/lms/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ reference_type: 'session', reference_id: session.session_id, rating, comment }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
+      onSubmitted(session.session_id, rating);
+    } catch (err) { setError(err.message); setSaving(false); }
+  };
+
+  const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-cortex-surface border border-cortex-border rounded-2xl w-full max-w-md shadow-xl">
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-cortex-border">
+          <div>
+            <h3 className="font-semibold text-cortex-text">Rate this session</h3>
+            <p className="text-xs text-cortex-muted mt-0.5">{session.title}</p>
+          </div>
+          <button onClick={onClose} className="text-cortex-muted hover:text-cortex-text transition">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          <div className="text-center">
+            <p className="text-sm text-cortex-muted mb-3">How would you rate your experience?</p>
+            <div className="flex justify-center mb-1">
+              <StarRating value={rating} onChange={setRating} size={32} />
+            </div>
+            {rating > 0 && (
+              <p className="text-sm font-medium text-amber-500">{labels[rating]}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-cortex-muted block mb-1.5">
+              Comments <span className="font-normal">(optional)</span>
+            </label>
+            <textarea
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Share your thoughts about this session…"
+              className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent resize-none"
+            />
+            <div className="text-[11px] text-cortex-muted text-right mt-0.5">{comment.length}/500</div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-red-600 dark:text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 flex gap-2 justify-end">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-lg border border-cortex-border text-cortex-muted hover:text-cortex-text hover:bg-cortex-bg text-sm transition">
+            Skip
+          </button>
+          <button onClick={submit} disabled={saving || !rating}
+            className="px-4 py-2 rounded-lg bg-cortex-accent text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition">
+            {saving ? 'Submitting…' : 'Submit Rating'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SchedulePage() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [acking, setAcking]     = useState({});
   const [filter, setFilter]     = useState('upcoming');
+
+  // Feedback state
+  const [feedbackModal, setFeedbackModal] = useState(null); // session object
+  const [myFeedback, setMyFeedback]       = useState({});   // { [sessionId]: { rating } }
 
   // Chat state per session
   const [openChat, setOpenChat] = useState(null); // session_id
@@ -43,6 +165,23 @@ export default function SchedulePage() {
     apiFetch('/api/lms/me/schedule').then(r => r?.json()).then(d => { if (d) setSessions(d); }).finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+
+  // Load my feedback for past-attended sessions after sessions load
+  useEffect(() => {
+    const presentPast = sessions.filter(s => isPast(s) && s.attendance_status === 'present');
+    if (presentPast.length === 0) return;
+    Promise.all(
+      presentPast.map(s =>
+        apiFetch(`/api/lms/feedback?reference_type=session&reference_id=${s.session_id}`)
+          .then(r => r?.json())
+          .then(d => d ? [s.session_id, d] : null)
+      )
+    ).then(results => {
+      const map = {};
+      results.forEach(r => { if (r) map[r[0]] = r[1]; });
+      setMyFeedback(map);
+    });
+  }, [sessions]);
 
   const acknowledge = async (sessionId) => {
     setAcking(p => ({ ...p, [sessionId]: 'acking' }));
@@ -91,6 +230,11 @@ export default function SchedulePage() {
     setChatSending(false);
   };
 
+  const handleFeedbackSubmitted = (sessionId, rating) => {
+    setMyFeedback(p => ({ ...p, [sessionId]: { rating } }));
+    setFeedbackModal(null);
+  };
+
   const filtered = sessions.filter(s => {
     const past = isPast(s);
     if (filter === 'upcoming') return s.session_status !== 'cancelled' && !past;
@@ -110,6 +254,15 @@ export default function SchedulePage() {
 
   return (
     <div className="p-6 max-w-3xl">
+      {/* Feedback Modal */}
+      {feedbackModal && (
+        <FeedbackModal
+          session={feedbackModal}
+          onClose={() => setFeedbackModal(null)}
+          onSubmitted={handleFeedbackSubmitted}
+        />
+      )}
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-cortex-text">My Training Schedule</h1>
         <p className="text-cortex-muted text-sm mt-1">Physical training sessions assigned to you by the training team.</p>
@@ -166,6 +319,8 @@ export default function SchedulePage() {
             const isAcked     = !past && s.acknowledged_at && !needsAck(s);
             const chatOpen    = openChat === s.session_id;
             const sessionMsgs = messages[s.session_id] || [];
+            const feedback    = myFeedback[s.session_id];
+            const canRate     = past && s.attendance_status === 'present';
 
             return (
               <div key={s.session_id}>
@@ -186,6 +341,12 @@ export default function SchedulePage() {
                         {s.attendance_status !== 'enrolled' && (
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ATTEND_STYLE[s.attendance_status] || 'bg-cortex-border text-cortex-muted'}`}>
                             {ATTEND_LABEL[s.attendance_status]}
+                          </span>
+                        )}
+                        {/* Feedback star display */}
+                        {canRate && feedback && (
+                          <span className="text-xs flex items-center gap-1 text-amber-500 font-medium">
+                            {'★'.repeat(feedback.rating)}{'☆'.repeat(5 - feedback.rating)}
                           </span>
                         )}
                       </div>
@@ -240,6 +401,27 @@ export default function SchedulePage() {
                   {s.description && (
                     <div className="mt-3 pt-3 border-t border-cortex-border text-sm text-cortex-muted">
                       {s.description}
+                    </div>
+                  )}
+
+                  {/* Feedback button — past attended sessions only */}
+                  {canRate && (
+                    <div className="mt-3 pt-3 border-t border-cortex-border">
+                      {feedback ? (
+                        <button
+                          onClick={() => setFeedbackModal(s)}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition flex items-center gap-1.5"
+                        >
+                          ★ Edit Rating ({feedback.rating}/5)
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setFeedbackModal(s)}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-cortex-border text-cortex-muted hover:text-cortex-accent hover:border-cortex-accent hover:bg-cortex-bg transition flex items-center gap-1.5"
+                        >
+                          ☆ Rate this session
+                        </button>
+                      )}
                     </div>
                   )}
 

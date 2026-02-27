@@ -11,7 +11,7 @@ async function ownSession(pool, sessionId, userId) {
 }
 
 export async function DELETE(request, { params }) {
-  const { authError, user } = await requireRole(request, 'trainer', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'trainer', 'admin');
   if (authError) return authError;
 
   const pool = getPool();

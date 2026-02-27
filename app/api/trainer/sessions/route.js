@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function GET(request) {
-  const { authError, user } = await requireRole(request, 'trainer', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'trainer', 'admin');
   if (authError) return authError;
 
   const pool = getPool();
@@ -26,7 +26,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'trainer', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'trainer', 'admin');
   if (authError) return authError;
 
   const { title, description, location, scheduled_date, start_time, end_time, max_capacity } = await request.json();

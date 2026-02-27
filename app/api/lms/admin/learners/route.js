@@ -4,15 +4,16 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function GET(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();
   try {
     const result = await pool.query(`
       SELECT u.id, u.email, u.display_name, u.is_active, u.created_at,
+             u.company_id,
              lp.id as profile_id, lp.learner_type_id,
-             lt.name as learner_type_name,
+             lt.name as learner_type,
              COUNT(DISTINCT ulp.lesson_id) FILTER (WHERE ulp.completed = true)::int as completed_lessons,
              COUNT(DISTINCT ulp.lesson_id)::int as started_lessons
       FROM auth_users u
@@ -30,7 +31,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const { email, password, display_name, learner_type_id } = await request.json();

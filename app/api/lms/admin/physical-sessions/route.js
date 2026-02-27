@@ -27,7 +27,7 @@ const STATUS_QUERY = `
 `;
 
 export async function GET(request) {
-  const { authError } = await requireRole(request, 'admin', 'training');
+  const { authError } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   const pool = getPool();
@@ -59,12 +59,19 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
-  const { title, description, location, trainer_id, scheduled_date, start_time, end_time, max_capacity } = await request.json();
+  const body = await request.json();
+  const { title, description, location, scheduled_date, start_time, end_time } = body;
+  const trainer_id   = body.trainer_id   || null;
+  const max_capacity = body.max_capacity ? Number(body.max_capacity) : null;
+  const session_mode = body.session_mode || 'in_person';
   if (!title?.trim() || !scheduled_date || !start_time || !end_time) {
     return NextResponse.json({ error: 'title, scheduled_date, start_time, end_time are required' }, { status: 400 });
+  }
+  if (end_time <= start_time) {
+    return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
   }
 
   const pool = getPool();
@@ -72,11 +79,11 @@ export async function POST(request) {
     // Insert session first to get the ID
     const result = await pool.query(`
       INSERT INTO lms_physical_sessions
-        (title, description, location, trainer_id, scheduled_date, start_time, end_time, max_capacity, created_by, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'scheduled') RETURNING *
+        (title, description, location, trainer_id, scheduled_date, start_time, end_time, max_capacity, created_by, status, session_mode)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'scheduled',$10) RETURNING *
     `, [title.trim(), description || null, location || null,
-        trainer_id || null, scheduled_date, start_time, end_time,
-        max_capacity || null, user.id]);
+        trainer_id, scheduled_date, start_time, end_time,
+        max_capacity, user.id, session_mode]);
 
     const session = result.rows[0];
 

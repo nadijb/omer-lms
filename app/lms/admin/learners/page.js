@@ -1,4 +1,4 @@
-// frontend/app/lms/admin/learners/page.js
+// app/lms/admin/learners/page.js
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/auth';
 export default function LearnersPage() {
   const [learners, setLearners] = useState([]);
   const [types, setTypes]       = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ email: '', password: '', display_name: '', learner_type_id: '' });
@@ -14,18 +15,30 @@ export default function LearnersPage() {
   const [error, setError]       = useState('');
   const [saving, setSaving]     = useState(false);
   const [search, setSearch]     = useState('');
+  const [filterOrg, setFilterOrg] = useState('');
 
   const load = async () => {
-    const [l, t] = await Promise.all([
+    const [l, t, c] = await Promise.all([
       apiFetch('/api/lms/admin/learners').then(r => r?.json()),
       apiFetch('/api/lms/admin/learner-types').then(r => r?.json()),
+      apiFetch('/api/lms/admin/companies').then(r => r?.json()),
     ]);
     if (l) setLearners(l);
     if (t) setTypes(t.filter(x => x.is_active));
+    if (c) setCompanies(c);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  // Sync filterOrg with the sidebar org switcher
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('lms_selectedOrg') || '' : '';
+    setFilterOrg(saved);
+    const handler = (e) => setFilterOrg(e.detail);
+    window.addEventListener('lms-org-change', handler);
+    return () => window.removeEventListener('lms-org-change', handler);
+  }, []);
 
   const save = async (e) => {
     e.preventDefault(); setError(''); setSaving(true);
@@ -52,27 +65,40 @@ export default function LearnersPage() {
     setShowForm(true);
   };
 
-  const filtered = learners.filter(l =>
-    !search || (l.email + (l.display_name || '') + (l.learner_type || '')).toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter by org and search
+  const filtered = learners.filter(l => {
+    if (filterOrg && String(l.company_id) !== filterOrg) return false;
+    if (search && !(l.email + (l.display_name || '') + (l.learner_type || '')).toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const activeOrgName = companies.find(c => String(c.id) === filterOrg)?.company_name;
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-1">
         <div>
-          <h1 className="text-xl font-bold text-cortex-text">Learners</h1>
-          <p className="text-cortex-muted text-sm mt-0.5">{learners.length} total learners</p>
+          <h1 className="text-xl font-bold text-cortex-text">Learner Progress</h1>
+          <p className="text-cortex-muted text-sm mt-0.5">
+            {activeOrgName
+              ? <>{filtered.length} learners in <span className="text-cortex-accent font-medium">{activeOrgName}</span></>
+              : <>{learners.length} total learners across all organisations</>
+            }
+            {' · '}
+            <Link href="/lms/admin/users?role=learner" className="text-cortex-accent hover:underline text-xs">Manage in Users →</Link>
+          </p>
         </div>
-        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ email: '', password: '', display_name: '', learner_type_id: '' }); }}
-          className="bg-cortex-accent text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition">
-          + Add Learner
-        </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
+      {/* Search + filter bar */}
+      <div className="flex gap-2 mb-4 mt-4 flex-wrap">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email, or type…"
-          className="w-full max-w-sm bg-cortex-surface border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent" />
+          className="bg-cortex-surface border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent w-64" />
+        <select value={filterOrg} onChange={e => setFilterOrg(e.target.value)}
+          className="bg-cortex-surface border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent">
+          <option value="">All Organisations</option>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+        </select>
       </div>
 
       {/* Table */}
@@ -91,7 +117,14 @@ export default function LearnersPage() {
             {loading ? (
               <tr><td colSpan={5} className="px-5 py-12 text-center text-cortex-muted">Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="px-5 py-12 text-center text-cortex-muted">No learners found</td></tr>
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center text-cortex-muted">
+                  {filterOrg
+                    ? <>No learners in this organisation. <Link href="/lms/admin/users" className="text-cortex-accent hover:underline">Add via Users page →</Link></>
+                    : 'No learners found'
+                  }
+                </td>
+              </tr>
             ) : filtered.map(l => (
               <tr key={l.id} className="hover:bg-cortex-bg transition">
                 <td className="px-5 py-3">
@@ -105,7 +138,7 @@ export default function LearnersPage() {
                     </div>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-cortex-muted">{l.learner_type || '—'}</td>
+                <td className="px-5 py-3 text-cortex-muted">{l.learner_type || <span className="text-cortex-border">—</span>}</td>
                 <td className="px-5 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${l.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-500'}`}>
                     {l.is_active ? 'Active' : 'Inactive'}
@@ -138,6 +171,7 @@ export default function LearnersPage() {
           <div className="bg-cortex-surface border border-cortex-border rounded-2xl w-full max-w-md shadow-2xl">
             <div className="px-6 py-4 border-b border-cortex-border">
               <h2 className="font-semibold text-cortex-text">{editId ? 'Edit Learner' : 'Add Learner'}</h2>
+              {!editId && <p className="text-xs text-cortex-muted mt-0.5">To set organisation/department, use <Link href="/lms/admin/users" className="text-cortex-accent hover:underline">Users management →</Link></p>}
             </div>
             <form onSubmit={save} className="p-6 space-y-4">
               {!editId && (

@@ -3,7 +3,7 @@ import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
 
 export async function PATCH(request, { params }) {
-  const { authError, user } = await requireRole(request, 'learner', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'admin');
   if (authError) return authError;
 
   const { total_active_seconds, total_idle_seconds } = await request.json();

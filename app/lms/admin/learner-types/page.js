@@ -45,7 +45,13 @@ export default function LearnerTypesPage() {
 
   return (
     <div className="p-6 max-w-4xl">
-      <h1 className="text-xl font-bold text-cortex-text mb-6">Learner Types</h1>
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-cortex-text">Learner Types</h1>
+        <p className="text-sm text-cortex-muted mt-1">
+          Learner types categorise your users (e.g. "Doctors", "Nurses", "Admin Staff").
+          They control which lessons are assigned — content is assigned to a learner type, and all users of that type see it automatically.
+        </p>
+      </div>
 
       {/* Form */}
       <div className="bg-cortex-surface border border-cortex-border rounded-xl p-5 mb-6">

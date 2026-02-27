@@ -52,6 +52,12 @@ export default function ContentPage() {
   // Inline section add state
   const [inlineAdd, setInlineAdd] = useState(null); // { type:'section'|'subsection'|'lesson', parentId, value }
 
+  // Assignment panel state
+  const [assignTypes,  setAssignTypes]  = useState([]);
+  const [assignTypeId, setAssignTypeId] = useState('');
+  const [assignedIds,  setAssignedIds]  = useState(new Set());
+  const [assignSaving, setAssignSaving] = useState({});
+
   // ── loaders ────────────────────────────────────────────────────────────────
   const loadCourses = useCallback(async () => {
     const d = await apiFetch('/api/lms/admin/content/courses').then(r => r?.json());
@@ -80,6 +86,16 @@ export default function ContentPage() {
     setManualEnabled(!!(data.manual_markdown));
     setPanel({ type, data });
     setInlineAdd(null);
+    // Load assignment data if opening assignment panel
+    if (type === 'assign_course') {
+      setAssignTypeId('');
+      setAssignedIds(new Set());
+      if (assignTypes.length === 0) {
+        apiFetch('/api/lms/admin/learner-types').then(r => r?.json()).then(d => {
+          if (d) setAssignTypes(d.filter(t => t.is_active));
+        });
+      }
+    }
   };
 
   const closePanel = () => {
@@ -292,6 +308,35 @@ export default function ContentPage() {
     }
   };
 
+  // ── assignment helpers ─────────────────────────────────────────────────────
+  const loadAssignments = useCallback(async (typeId) => {
+    const d = await apiFetch(`/api/lms/admin/assignments?learner_type_id=${typeId}`).then(r => r?.json());
+    if (d) setAssignedIds(new Set(d.map(a => a.lesson_id)));
+  }, []);
+
+  useEffect(() => {
+    if (panel?.type === 'assign_course' && assignTypeId) loadAssignments(assignTypeId);
+  }, [assignTypeId, panel?.type, loadAssignments]);
+
+  const toggleAssign = async (lessonId, isAssigned) => {
+    setAssignSaving(p => ({ ...p, [lessonId]: true }));
+    try {
+      if (isAssigned) {
+        await apiFetch('/api/lms/admin/assignments', {
+          method: 'DELETE', body: JSON.stringify({ learner_type_id: Number(assignTypeId), lesson_id: lessonId })
+        });
+        setAssignedIds(prev => { const n = new Set(prev); n.delete(lessonId); return n; });
+      } else {
+        await apiFetch('/api/lms/admin/assignments', {
+          method: 'POST', body: JSON.stringify({ learner_type_id: Number(assignTypeId), lesson_id: lessonId })
+        });
+        setAssignedIds(prev => new Set([...prev, lessonId]));
+      }
+    } finally {
+      setAssignSaving(p => ({ ...p, [lessonId]: false }));
+    }
+  };
+
   // ── derived ────────────────────────────────────────────────────────────────
   const rootSections    = tree.filter(s => !s.parent_section_id);
   const childSections   = (pid) => tree.filter(s => s.parent_section_id === pid);
@@ -301,6 +346,7 @@ export default function ContentPage() {
   const isPanelSection  = panel?.type === 'new_section'  || panel?.type === 'edit_section';
   const isPanelCourse   = panel?.type === 'new_course'   || panel?.type === 'edit_course';
   const isPanelPreview  = panel?.type === 'preview_lesson';
+  const isPanelAssign   = panel?.type === 'assign_course';
 
   // ── render ─────────────────────────────────────────────────────────────────
   return (
@@ -357,10 +403,20 @@ export default function ContentPage() {
                 <div className="font-semibold text-cortex-text truncate">{selectedCourse.title}</div>
                 {selectedCourse.description && <div className="text-xs text-cortex-muted truncate">{selectedCourse.description}</div>}
               </div>
-              <button onClick={() => { setInlineAdd({ type: 'section', parentId: null, value: '' }); setPanel(null); }}
-                className="text-xs px-3 py-1.5 rounded-lg bg-cortex-accent text-white hover:opacity-90 transition flex items-center gap-1.5 flex-shrink-0">
-                <Ic d="plus" size={12} /> Section
-              </button>
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={() => openPanel('assign_course', { ...selectedCourse })}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 ${
+                    isPanelAssign
+                      ? 'border-cortex-accent text-cortex-accent bg-cortex-accent/10'
+                      : 'border-cortex-border text-cortex-muted hover:text-cortex-accent hover:border-cortex-accent/50'
+                  }`}>
+                  🔗 Assign
+                </button>
+                <button onClick={() => { setInlineAdd({ type: 'section', parentId: null, value: '' }); setPanel(null); }}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-cortex-accent text-white hover:opacity-90 transition flex items-center gap-1.5">
+                  <Ic d="plus" size={12} /> Section
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -419,6 +475,7 @@ export default function ContentPage() {
               {panel.type === 'new_lesson'     && 'New Lesson'}
               {panel.type === 'edit_lesson'    && 'Edit Lesson'}
               {panel.type === 'preview_lesson' && 'Lesson Preview'}
+              {panel.type === 'assign_course'  && 'Manage Assignments'}
             </h3>
             <div className="flex items-center gap-2">
               {isPanelPreview && (
@@ -667,6 +724,135 @@ export default function ContentPage() {
                   onCancel={closePanel}
                   onDelete={panel.type === 'edit_lesson' ? () => setDeletingId({ type: 'lesson', id: panel.data.id }) : null} />
               </form>
+            )}
+
+            {/* ── Assignment panel ── */}
+            {isPanelAssign && (
+              <div className="flex flex-col h-full">
+                <div className="px-5 py-3 border-b border-cortex-border">
+                  <p className="text-xs text-cortex-muted mb-2">
+                    Select a learner type to manage which lessons in <strong className="text-cortex-text">{panel.data.title}</strong> are assigned to them.
+                  </p>
+                  <select value={assignTypeId} onChange={e => setAssignTypeId(e.target.value)} className={INPUT}>
+                    <option value="">— Select learner type —</option>
+                    {assignTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  {assignTypes.length === 0 && (
+                    <p className="text-xs text-cortex-muted mt-2">
+                      No learner types found.{' '}
+                      <a href="/lms/admin/learner-types" className="text-cortex-accent hover:underline">Create one first →</a>
+                    </p>
+                  )}
+                </div>
+
+                {assignTypeId ? (
+                  <div className="flex-1 overflow-y-auto">
+                    {/* Progress bar */}
+                    {(() => {
+                      const all = tree.flatMap(s => s.lessons || []);
+                      const done = all.filter(l => assignedIds.has(l.id)).length;
+                      return all.length > 0 ? (
+                        <div className="px-5 py-3 border-b border-cortex-border">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-cortex-muted">{done} / {all.length} lessons assigned</span>
+                            <span className="text-xs text-cortex-accent font-medium">{Math.round(done / all.length * 100)}%</span>
+                          </div>
+                          <div className="h-1.5 bg-cortex-border rounded-full overflow-hidden">
+                            <div className="h-full bg-cortex-accent rounded-full transition-all" style={{ width: `${Math.round(done / all.length * 100)}%` }} />
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Sections + lessons */}
+                    {rootSections.map(section => {
+                      const sLessons = section.lessons || [];
+                      const assignedHere = sLessons.filter(l => assignedIds.has(l.id)).length;
+                      const allAssigned  = sLessons.length > 0 && assignedHere === sLessons.length;
+                      return (
+                        <div key={section.id} className="border-b border-cortex-border last:border-0">
+                          {/* Section header */}
+                          <div className="flex items-center gap-3 px-5 py-2.5 bg-cortex-bg">
+                            <span className="text-xs font-semibold text-cortex-text flex-1 truncate">{section.title}</span>
+                            <span className="text-xs text-cortex-muted">{assignedHere}/{sLessons.length}</span>
+                            {sLessons.length > 1 && (
+                              <button onClick={() => sLessons.filter(l => allAssigned ? assignedIds.has(l.id) : !assignedIds.has(l.id)).forEach(l => toggleAssign(l.id, allAssigned))}
+                                className={`text-xs px-2 py-1 rounded transition font-medium ${allAssigned ? 'text-cortex-accent' : 'text-cortex-muted hover:text-cortex-text'}`}>
+                                {allAssigned ? 'Unassign all' : 'Assign all'}
+                              </button>
+                            )}
+                          </div>
+                          {/* Lesson rows */}
+                          {sLessons.map(lesson => (
+                            <div key={lesson.id} className="flex items-center gap-3 px-5 py-2 border-t border-cortex-border hover:bg-cortex-bg transition">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm text-cortex-text truncate">{lesson.title}</div>
+                                <div className="text-xs text-cortex-muted flex gap-2">
+                                  {lesson.video_url && <span className="text-green-600 dark:text-green-400">● video</span>}
+                                  {lesson.manual_markdown && <span>● manual</span>}
+                                </div>
+                              </div>
+                              <button onClick={() => toggleAssign(lesson.id, assignedIds.has(lesson.id))}
+                                disabled={!!assignSaving[lesson.id]}
+                                className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 ${
+                                  assignedIds.has(lesson.id)
+                                    ? 'bg-cortex-accent text-white hover:bg-cortex-accent/80'
+                                    : 'bg-cortex-bg border border-cortex-border text-cortex-muted hover:text-cortex-text'
+                                }`}>
+                                {assignSaving[lesson.id]
+                                  ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin inline-block" />
+                                  : assignedIds.has(lesson.id) ? '✓ Assigned' : '+ Assign'
+                                }
+                              </button>
+                            </div>
+                          ))}
+                          {sLessons.length === 0 && (
+                            <div className="px-8 py-2 text-xs text-cortex-muted italic border-t border-cortex-border">No lessons in this section</div>
+                          )}
+                          {/* Child sections */}
+                          {childSections(section.id).map(child => (
+                            <div key={child.id} className="ml-4 border-l-2 border-cortex-border">
+                              <div className="flex items-center gap-2 px-4 py-2 bg-cortex-bg">
+                                <span className="text-xs font-medium text-cortex-muted flex-1">{child.title}</span>
+                                <span className="text-xs text-cortex-muted">{(child.lessons || []).filter(l => assignedIds.has(l.id)).length}/{(child.lessons || []).length}</span>
+                              </div>
+                              {(child.lessons || []).map(lesson => (
+                                <div key={lesson.id} className="flex items-center gap-3 px-4 py-2 border-t border-cortex-border hover:bg-cortex-bg transition">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-cortex-text truncate">{lesson.title}</div>
+                                  </div>
+                                  <button onClick={() => toggleAssign(lesson.id, assignedIds.has(lesson.id))}
+                                    disabled={!!assignSaving[lesson.id]}
+                                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 ${
+                                      assignedIds.has(lesson.id)
+                                        ? 'bg-cortex-accent text-white hover:bg-cortex-accent/80'
+                                        : 'bg-cortex-bg border border-cortex-border text-cortex-muted hover:text-cortex-text'
+                                    }`}>
+                                    {assignSaving[lesson.id]
+                                      ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin inline-block" />
+                                      : assignedIds.has(lesson.id) ? '✓ Assigned' : '+ Assign'
+                                    }
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                    {rootSections.length === 0 && (
+                      <div className="p-8 text-center text-cortex-muted text-sm">No sections in this course yet. Add sections first.</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-cortex-muted">
+                    <div className="text-center px-5">
+                      <div className="text-4xl mb-3">🔗</div>
+                      <div className="text-sm">Select a learner type above to manage lesson assignments for this course</div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

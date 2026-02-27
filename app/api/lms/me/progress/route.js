@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/server-auth';
 const COMPLETION_THRESHOLD = 80;
 
 export async function GET(request) {
-  const { authError, user } = await requireRole(request, 'learner', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'admin');
   if (authError) return authError;
 
   const pool = getPool();
@@ -23,7 +23,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { authError, user } = await requireRole(request, 'learner', 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'learner', 'admin');
   if (authError) return authError;
 
   const { lesson_id, percent_watched, last_position_seconds, total_watch_seconds_delta } = await request.json();

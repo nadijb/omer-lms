@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/server-auth';
 import { deleteVideoFile } from '@/lib/supabase-storage';
 
 export async function PATCH(request, { params }) {
-  const { authError, user } = await requireRole(request, 'admin', 'training');
+  const { authError, user } = await requireRole(request, 'admin');
   if (authError) return authError;
 
   try {
