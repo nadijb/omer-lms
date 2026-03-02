@@ -52,90 +52,115 @@ function StarRating({ value, onChange, size = 24 }) {
   );
 }
 
-// ─── Feedback Modal ───────────────────────────────────────────────────────────
-function FeedbackModal({ session, onClose, onSubmitted }) {
-  const [rating, setRating]   = useState(0);
-  const [comment, setComment] = useState('');
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState('');
+// ─── Inline Feedback Panel ────────────────────────────────────────────────────
+function InlineFeedbackPanel({ session, existing, onSubmitted, onClose }) {
+  const [rating,      setRating]      = useState(existing?.rating  || 0);
+  const [comment,     setComment]     = useState(existing?.comment  || '');
+  const [reqType,     setReqType]     = useState(existing?.request_type || '');
+  const [reqDetail,   setReqDetail]   = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+  const [submitted,   setSubmitted]   = useState(false);
+  const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
 
   const submit = async () => {
-    if (!rating) { setError('Please select a rating.'); return; }
-    setSaving(true);
-    setError('');
+    if (!rating) { setError('Please select a rating first.'); return; }
+    setSaving(true); setError('');
     try {
       const r = await apiFetch('/api/lms/feedback', {
         method: 'POST',
-        body: JSON.stringify({ reference_type: 'session', reference_id: session.session_id, rating, comment }),
+        body: JSON.stringify({
+          reference_type: 'session',
+          reference_id: session.session_id,
+          rating, comment,
+          request_type: reqType || null,
+          request_detail: reqDetail || null,
+        }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
-      onSubmitted(session.session_id, rating);
-    } catch (err) { setError(err.message); setSaving(false); }
+      setSubmitted(true);
+      onSubmitted(session.session_id, rating, reqType);
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
   };
 
-  const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+  if (submitted) {
+    return (
+      <div className="bg-cortex-bg border border-cortex-border rounded-xl p-4 text-center">
+        <div className="text-green-500 text-lg mb-1">✓ Thank you for your feedback!</div>
+        <div className="text-amber-500 text-sm">{'★'.repeat(rating)}{'☆'.repeat(5-rating)}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-cortex-surface border border-cortex-border rounded-2xl w-full max-w-md shadow-xl">
-        {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-cortex-border">
-          <div>
-            <h3 className="font-semibold text-cortex-text">Rate this session</h3>
-            <p className="text-xs text-cortex-muted mt-0.5">{session.title}</p>
-          </div>
-          <button onClick={onClose} className="text-cortex-muted hover:text-cortex-text transition">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+    <div className="bg-cortex-bg border border-cortex-border rounded-xl p-4 space-y-4">
+      {/* Rating */}
+      <div>
+        <div className="text-xs font-semibold text-cortex-muted mb-2">How was this session?</div>
+        <div className="flex items-center gap-3">
+          <StarRating value={rating} onChange={setRating} size={28} />
+          {rating > 0 && <span className="text-sm font-medium text-amber-500">{labels[rating]}</span>}
         </div>
+      </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          <div className="text-center">
-            <p className="text-sm text-cortex-muted mb-3">How would you rate your experience?</p>
-            <div className="flex justify-center mb-1">
-              <StarRating value={rating} onChange={setRating} size={32} />
-            </div>
-            {rating > 0 && (
-              <p className="text-sm font-medium text-amber-500">{labels[rating]}</p>
-            )}
-          </div>
+      {/* Comment box */}
+      <div>
+        <div className="text-xs font-semibold text-cortex-muted mb-1.5">Comments</div>
+        <textarea
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+          rows={3}
+          maxLength={1000}
+          placeholder="Share your thoughts, suggestions, or anything helpful for the trainer…"
+          className="w-full bg-cortex-surface border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent resize-none"
+        />
+        <div className="text-[11px] text-cortex-muted text-right">{comment.length}/1000</div>
+      </div>
 
-          <div>
-            <label className="text-xs font-semibold text-cortex-muted block mb-1.5">
-              Comments <span className="font-normal">(optional)</span>
-            </label>
-            <textarea
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              rows={3}
-              maxLength={500}
-              placeholder="Share your thoughts about this session…"
-              className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent resize-none"
-            />
-            <div className="text-[11px] text-cortex-muted text-right mt-0.5">{comment.length}/500</div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 text-red-600 dark:text-red-400 text-sm">
-              {error}
-            </div>
-          )}
+      {/* Request section */}
+      <div>
+        <div className="text-xs font-semibold text-cortex-muted mb-2">Send a Request <span className="font-normal">(optional)</span></div>
+        <div className="flex gap-2 flex-wrap mb-2">
+          {[['new_video','📹 New Video'],['clarification','❓ Clarification'],['new_feature','✨ New Feature']].map(([v,l]) => (
+            <button key={v} type="button"
+              onClick={() => setReqType(reqType === v ? '' : v)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${
+                reqType === v
+                  ? 'bg-cortex-accent text-white border-cortex-accent'
+                  : 'border-cortex-border text-cortex-muted hover:border-cortex-accent hover:text-cortex-accent'
+              }`}>
+              {l}
+            </button>
+          ))}
         </div>
+        {reqType && (
+          <textarea
+            value={reqDetail}
+            onChange={e => setReqDetail(e.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder={
+              reqType === 'new_video' ? "Describe what topic or content you'd like a video on…" :
+              reqType === 'clarification' ? "What needs more explanation or detail?" :
+              "Describe the feature or improvement you'd like to see…"
+            }
+            className="w-full bg-cortex-surface border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent resize-none"
+          />
+        )}
+      </div>
 
-        {/* Footer */}
-        <div className="px-5 pb-5 flex gap-2 justify-end">
-          <button onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-cortex-border text-cortex-muted hover:text-cortex-text hover:bg-cortex-bg text-sm transition">
-            Skip
-          </button>
-          <button onClick={submit} disabled={saving || !rating}
-            className="px-4 py-2 rounded-lg bg-cortex-accent text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition">
-            {saving ? 'Submitting…' : 'Submit Rating'}
-          </button>
-        </div>
+      {error && <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">{error}</div>}
+
+      <div className="flex gap-2">
+        <button onClick={submit} disabled={saving || !rating}
+          className="flex-1 px-4 py-2 bg-cortex-accent text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition">
+          {saving ? 'Submitting…' : 'Submit Feedback'}
+        </button>
+        <button onClick={onClose}
+          className="px-4 py-2 border border-cortex-border text-cortex-muted hover:text-cortex-text hover:bg-cortex-surface rounded-lg text-sm transition">
+          Cancel
+        </button>
       </div>
     </div>
   );
@@ -150,8 +175,8 @@ export default function SchedulePage() {
   const [filter, setFilter]     = useState('upcoming');
 
   // Feedback state
-  const [feedbackModal, setFeedbackModal] = useState(null); // session object
-  const [myFeedback, setMyFeedback]       = useState({});   // { [sessionId]: { rating } }
+  const [openFeedback, setOpenFeedback] = useState(new Set()); // set of session_ids with open panel
+  const [myFeedback,   setMyFeedback]   = useState({});        // { [sessionId]: { rating } }
 
   // Chat state per session
   const [openChat, setOpenChat] = useState(null); // session_id
@@ -230,10 +255,17 @@ export default function SchedulePage() {
     setChatSending(false);
   };
 
-  const handleFeedbackSubmitted = (sessionId, rating) => {
-    setMyFeedback(p => ({ ...p, [sessionId]: { rating } }));
-    setFeedbackModal(null);
+  const handleFeedbackSubmitted = (sessionId, rating, reqType) => {
+    setMyFeedback(p => ({ ...p, [sessionId]: { rating, request_type: reqType } }));
+    // Keep panel open to show the "thank you" state, then auto-close after 2s
+    setTimeout(() => setOpenFeedback(p => { const n = new Set(p); n.delete(sessionId); return n; }), 2000);
   };
+
+  const toggleFeedback = (sessionId) => setOpenFeedback(p => {
+    const n = new Set(p);
+    n.has(sessionId) ? n.delete(sessionId) : n.add(sessionId);
+    return n;
+  });
 
   const filtered = sessions.filter(s => {
     const past = isPast(s);
@@ -254,15 +286,6 @@ export default function SchedulePage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      {/* Feedback Modal */}
-      {feedbackModal && (
-        <FeedbackModal
-          session={feedbackModal}
-          onClose={() => setFeedbackModal(null)}
-          onSubmitted={handleFeedbackSubmitted}
-        />
-      )}
-
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-cortex-text">My Training Schedule</h1>
         <p className="text-cortex-muted text-sm mt-1">Physical training sessions assigned to you by the training team.</p>
@@ -404,23 +427,26 @@ export default function SchedulePage() {
                     </div>
                   )}
 
-                  {/* Feedback button — past attended sessions only */}
+                  {/* Inline feedback section — past attended sessions only */}
                   {canRate && (
-                    <div className="mt-3 pt-3 border-t border-cortex-border">
-                      {feedback ? (
-                        <button
-                          onClick={() => setFeedbackModal(s)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition flex items-center gap-1.5"
-                        >
-                          ★ Edit Rating ({feedback.rating}/5)
+                    <div className="mt-3 pt-3 border-t border-cortex-border space-y-2">
+                      {!openFeedback.has(s.session_id) && (
+                        <button onClick={() => toggleFeedback(s.session_id)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 ${
+                            feedback
+                              ? 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                              : 'border-cortex-border text-cortex-muted hover:text-cortex-accent hover:border-cortex-accent hover:bg-cortex-bg'
+                          }`}>
+                          {feedback ? `★ Edit Rating (${feedback.rating}/5)` : '☆ Rate this session'}
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => setFeedbackModal(s)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-cortex-border text-cortex-muted hover:text-cortex-accent hover:border-cortex-accent hover:bg-cortex-bg transition flex items-center gap-1.5"
-                        >
-                          ☆ Rate this session
-                        </button>
+                      )}
+                      {openFeedback.has(s.session_id) && (
+                        <InlineFeedbackPanel
+                          session={s}
+                          existing={feedback}
+                          onSubmitted={handleFeedbackSubmitted}
+                          onClose={() => toggleFeedback(s.session_id)}
+                        />
                       )}
                     </div>
                   )}

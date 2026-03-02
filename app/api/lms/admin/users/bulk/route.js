@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
+import { generateStaffId } from '@/lib/generateStaffId';
+import { sendInvitationEmail } from '@/lib/email';
 
 // POST /api/lms/admin/users/bulk
 // Body: { rows: [{email, display_name, password, role, staff_id,
@@ -79,10 +81,19 @@ export async function POST(request) {
       learner_type_id = lt.id;
     }
 
+    // Resolve staff_id: use provided value unless blank or equals email (invalid)
+    let resolvedStaffId = row.staff_id?.toString().trim() || null;
+
     // Insert user
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Auto-generate staff_id if blank or if it was incorrectly set to the email
+      if (!resolvedStaffId || resolvedStaffId.toLowerCase() === email) {
+        resolvedStaffId = await generateStaffId(client, email, row.display_name?.toString().trim());
+      }
+
       const hash = await bcrypt.hash(pwd, 10); // salt 10 for speed in bulk ops
       const r = await client.query(`
         INSERT INTO auth_users
@@ -94,7 +105,7 @@ export async function POST(request) {
       `, [
         email, hash, role,
         row.display_name?.toString().trim() || null,
-        row.staff_id?.toString().trim() || null,
+        resolvedStaffId,
         company_id, department_id, sub_department_id,
       ]);
 
@@ -106,7 +117,16 @@ export async function POST(request) {
         `, [userId, learner_type_id]);
       }
       await client.query('COMMIT');
-      results.push({ row: rowNum, email, success: true });
+
+      // Send invitation email (non-blocking)
+      const { sent: emailSent, error: emailError } = await sendInvitationEmail(
+        email,
+        row.display_name?.toString().trim(),
+        pwd,
+        resolvedStaffId
+      );
+
+      results.push({ row: rowNum, email, success: true, emailSent, emailError: emailError || null });
     } catch (err) {
       await client.query('ROLLBACK');
       const msg = err.code === '23505' ? 'Email already exists' : err.message;
@@ -116,6 +136,8 @@ export async function POST(request) {
     }
   }
 
-  const succeeded = results.filter(r => r.success).length;
-  return NextResponse.json({ results, succeeded, total: rows.length });
+  const succeeded    = results.filter(r => r.success).length;
+  const emailsSent   = results.filter(r => r.success && r.emailSent).length;
+  const emailsFailed = results.filter(r => r.success && !r.emailSent).length;
+  return NextResponse.json({ results, succeeded, total: rows.length, emailsSent, emailsFailed });
 }

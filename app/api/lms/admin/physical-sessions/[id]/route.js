@@ -8,7 +8,7 @@ export async function PUT(request, { params }) {
   if (authError) return authError;
 
   const body = await request.json();
-  const { title, description, location, scheduled_date, start_time, end_time, status } = body;
+  const { title, description, location, facility, scheduled_date, start_time, end_time, status } = body;
   const trainer_id   = body.trainer_id   || null;
   const max_capacity = body.max_capacity ? Number(body.max_capacity) : null;
   const session_mode = body.session_mode || null;
@@ -19,18 +19,19 @@ export async function PUT(request, { params }) {
         title          = COALESCE($1, title),
         description    = COALESCE($2, description),
         location       = COALESCE($3, location),
-        trainer_id     = COALESCE($4, trainer_id),
-        scheduled_date = COALESCE($5, scheduled_date),
-        start_time     = COALESCE($6, start_time),
-        end_time       = COALESCE($7, end_time),
-        max_capacity   = COALESCE($8, max_capacity),
-        status         = COALESCE($9, status),
-        session_mode   = COALESCE($11, session_mode),
+        facility       = COALESCE($4, facility),
+        trainer_id     = COALESCE($5, trainer_id),
+        scheduled_date = COALESCE($6, scheduled_date),
+        start_time     = COALESCE($7, start_time),
+        end_time       = COALESCE($8, end_time),
+        max_capacity   = COALESCE($9, max_capacity),
+        status         = COALESCE($10, status),
+        session_mode   = COALESCE($12, session_mode),
         updated_at     = NOW()
-      WHERE id = $10 RETURNING *
-    `, [title?.trim() || null, description || null, location || null, trainer_id,
-        scheduled_date || null, start_time || null, end_time || null, max_capacity, status || null,
-        params.id, session_mode]);
+      WHERE id = $11 RETURNING *
+    `, [title?.trim() || null, description || null, location || null, facility || null,
+        trainer_id, scheduled_date || null, start_time || null, end_time || null,
+        max_capacity, status || null, params.id, session_mode]);
 
     if (!result.rows[0]) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     const session = result.rows[0];

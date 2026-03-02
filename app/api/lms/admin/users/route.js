@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getPool } from '@/lib/db';
 import { requireRole } from '@/lib/server-auth';
+import { generateStaffId } from '@/lib/generateStaffId';
+import { sendInvitationEmail } from '@/lib/email';
 
 export async function GET(request) {
   const { authError } = await requireRole(request, 'admin');
@@ -55,17 +57,11 @@ export async function POST(request) {
     const hash = await bcrypt.hash(password, 12);
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Auto-generate staff_id from email local part if not provided
+    // Resolve staff_id: use provided value unless it equals the email (invalid),
+    // or is blank — in those cases auto-generate a proper formatted ID.
     let resolvedStaffId = staff_id?.trim() || null;
-    if (!resolvedStaffId) {
-      const localPart = normalizedEmail.split('@')[0];
-      // Try the local part first; if it collides, append the domain prefix
-      const domain = normalizedEmail.split('@')[1]?.split('.')[0] || '';
-      const existing = await client.query(
-        'SELECT 1 FROM auth_users WHERE staff_id = $1',
-        [localPart]
-      );
-      resolvedStaffId = existing.rowCount === 0 ? localPart : `${localPart}.${domain}`;
+    if (!resolvedStaffId || resolvedStaffId.toLowerCase() === normalizedEmail) {
+      resolvedStaffId = await generateStaffId(client, normalizedEmail, display_name);
     }
 
     const r = await client.query(`
@@ -94,7 +90,13 @@ export async function POST(request) {
     }
 
     await client.query('COMMIT');
-    return NextResponse.json(newUser, { status: 201 });
+
+    // Send invitation email (non-blocking — failure doesn't abort user creation)
+    const { sent: emailSent, error: emailError } = await sendInvitationEmail(
+      normalizedEmail, display_name, password, resolvedStaffId
+    );
+
+    return NextResponse.json({ ...newUser, emailSent, emailError }, { status: 201 });
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') return NextResponse.json({ error: 'Email already exists' }, { status: 409 });

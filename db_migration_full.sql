@@ -76,6 +76,45 @@ CREATE TABLE IF NOT EXISTS test.lms_session_messages (
 CREATE INDEX IF NOT EXISTS idx_lms_session_messages_session
   ON test.lms_session_messages (session_id, created_at);
 
+-- ── 11. Facility field on training sessions ───────────────────
+ALTER TABLE test.lms_physical_sessions
+  ADD COLUMN IF NOT EXISTS facility VARCHAR;
+-- Stores the building/site name independently of the room 'location' field.
+-- Example values: 'Main Hospital', 'Clinic A', 'Simulation Lab', 'Conference Hall B'
+
+-- ── 12. Request type and detail on feedback ───────────────────
+ALTER TABLE test.lms_feedback
+  ADD COLUMN IF NOT EXISTS request_type VARCHAR;
+-- Allows categorising feedback as a follow-up request
+-- e.g. 'repeat_session', 'additional_resources', 'topic_request'
+
+ALTER TABLE test.lms_feedback
+  ADD COLUMN IF NOT EXISTS request_detail TEXT;
+-- Free-text elaboration of the request_type selected above.
+
+-- ── 13. AI Companion sessions table ──────────────────────────
+CREATE TABLE IF NOT EXISTS test.ai_companion_sessions (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    TEXT NOT NULL UNIQUE,
+  messages   JSONB DEFAULT '[]'::jsonb,
+  summary    TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ── 14. Physical sessions: Google Chat space ──────────────────
+ALTER TABLE test.lms_physical_sessions
+  ADD COLUMN IF NOT EXISTS google_chat_space_id TEXT;
+
+-- ── 15. Physical enrollments: Google RSVP status ─────────────
+ALTER TABLE test.lms_physical_enrollments
+  ADD COLUMN IF NOT EXISTS google_rsvp_status VARCHAR DEFAULT 'pending';
+
+-- ── 16. Users: registration status ───────────────────────────
+ALTER TABLE test.auth_users
+  ADD COLUMN IF NOT EXISTS registration_status VARCHAR DEFAULT 'active';
+-- Values: 'active' | 'pending' | 'rejected'
+
 -- ── Done ──────────────────────────────────────────────────────
 -- After running, verify with:
 --   SELECT column_name FROM information_schema.columns

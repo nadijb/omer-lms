@@ -63,7 +63,7 @@ export async function POST(request) {
   if (authError) return authError;
 
   const body = await request.json();
-  const { title, description, location, scheduled_date, start_time, end_time } = body;
+  const { title, description, location, facility, scheduled_date, start_time, end_time } = body;
   const trainer_id   = body.trainer_id   || null;
   const max_capacity = body.max_capacity ? Number(body.max_capacity) : null;
   const session_mode = body.session_mode || 'in_person';
@@ -79,9 +79,9 @@ export async function POST(request) {
     // Insert session first to get the ID
     const result = await pool.query(`
       INSERT INTO lms_physical_sessions
-        (title, description, location, trainer_id, scheduled_date, start_time, end_time, max_capacity, created_by, status, session_mode)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'scheduled',$10) RETURNING *
-    `, [title.trim(), description || null, location || null,
+        (title, description, location, facility, trainer_id, scheduled_date, start_time, end_time, max_capacity, created_by, status, session_mode)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'scheduled',$11) RETURNING *
+    `, [title.trim(), description || null, location || null, facility || null,
         trainer_id, scheduled_date, start_time, end_time,
         max_capacity, user.id, session_mode]);
 

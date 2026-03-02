@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth, apiFetch } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import NotificationBell from "@/components/NotificationBell";
+import AICompanion from "@/components/AICompanion";
 
 const ADMIN_NAV = [
   { href: "/lms/admin",                   label: "Overview",          icon: "grid" },
@@ -230,6 +231,7 @@ export default function LMSLayout({ children }) {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto bg-cortex-bg">{children}</main>
       </div>
+      <AICompanion />
     </div>
   );
 }

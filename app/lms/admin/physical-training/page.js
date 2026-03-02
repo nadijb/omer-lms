@@ -11,7 +11,7 @@ const MONTHS = ['January','February','March','April','May','June','July',
 const HOUR_H = 56; // px per hour in week/day view
 
 const EMPTY_FORM = {
-  title: '', description: '', location: '', trainer_id: '',
+  title: '', description: '', location: '', facility: '', trainer_id: '',
   scheduled_date: '', start_time: '', end_time: '',
   max_capacity: '', session_mode: 'in_person',
 };
@@ -127,6 +127,9 @@ function TrainingSessionsInner() {
   const [meetError,      setMeetError]      = useState('');
   const [attendSaving,   setAttendSaving]   = useState({});
 
+  // ── Session feedback ─────────────────────────────────────────────────────
+  const [sessionFeedback, setSessionFeedback] = useState(null);
+
   // ── Chat ─────────────────────────────────────────────────────────────────
   const [messages,    setMessages]    = useState([]);
   const [chatInput,   setChatInput]   = useState('');
@@ -168,7 +171,7 @@ function TrainingSessionsInner() {
   }, []);
 
   useEffect(() => {
-    if (selected) { loadEnrollments(selected.id); setActiveTab('attendance'); setMessages([]); setMeetError(''); clearInterval(chatPollRef.current); }
+    if (selected) { loadEnrollments(selected.id); setActiveTab('attendance'); setMessages([]); setSessionFeedback(null); setMeetError(''); clearInterval(chatPollRef.current); }
   }, [selected?.id]);
 
   useEffect(() => {
@@ -177,6 +180,16 @@ function TrainingSessionsInner() {
       setChatLoading(true);
       loadMessages(selected.id).finally(() => setChatLoading(false));
       chatPollRef.current = setInterval(() => loadMessages(selected.id), 10_000);
+    }
+    if (activeTab === 'feedback' && selected && !sessionFeedback) {
+      apiFetch(`/api/lms/admin/analytics/feedback?reference_type=session`)
+        .then(r => r?.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            const match = data.find(f => f.session_id === selected.id);
+            setSessionFeedback(match || null);
+          }
+        });
     }
     return () => clearInterval(chatPollRef.current);
   }, [activeTab, selected?.id]);
@@ -243,7 +256,8 @@ function TrainingSessionsInner() {
     if (!selected) return;
     setForm({
       title: selected.title, description: selected.description || '',
-      location: selected.location || '', trainer_id: selected.trainer_id || '',
+      location: selected.location || '', facility: selected.facility || '',
+      trainer_id: selected.trainer_id || '',
       scheduled_date: selected.scheduled_date?.slice(0,10) || '',
       start_time: selected.start_time || '', end_time: selected.end_time || '',
       max_capacity: selected.max_capacity || '',
@@ -691,6 +705,7 @@ function TrainingSessionsInner() {
                     📅 {fmtDateLong(selected.scheduled_date)} &middot; {fmtTimeShort(selected.start_time)} – {fmtTimeShort(selected.end_time)}
                   </div>
                   {selected.location && <div className="text-sm text-cortex-muted">📍 {selected.location}</div>}
+                  {selected.facility && <div className="text-sm text-cortex-muted">🏥 {selected.facility}</div>}
                   {selected.trainer_name && <div className="text-sm text-cortex-muted">👤 {selected.trainer_name}</div>}
                   {selected.description && <div className="text-sm text-cortex-muted mt-2 leading-relaxed">{selected.description}</div>}
                 </div>
@@ -779,7 +794,7 @@ function TrainingSessionsInner() {
 
             {/* Tabs */}
             <div className="flex-shrink-0 flex gap-1 px-5 py-2.5 border-b border-cortex-border">
-              {[['attendance','👥 Attendance'],['chat','💬 Chat']].map(([v,l]) => (
+              {[['attendance','👥 Attendance'],['feedback','⭐ Feedback'],['chat','💬 Chat']].map(([v,l]) => (
                 <button key={v} onClick={() => setActiveTab(v)}
                   className={`px-4 py-1.5 rounded-lg text-sm transition font-medium ${activeTab===v ? 'bg-cortex-accent text-white' : 'text-cortex-muted hover:bg-cortex-bg border border-cortex-border'}`}>
                   {l}
@@ -856,6 +871,76 @@ function TrainingSessionsInner() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Feedback tab */}
+              {activeTab === 'feedback' && (
+                <div className="p-5">
+                  {sessionFeedback === undefined ? (
+                    <div className="text-center py-10 text-cortex-muted text-sm">
+                      <div className="w-5 h-5 border-2 border-cortex-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                      Loading feedback…
+                    </div>
+                  ) : !sessionFeedback ? (
+                    <div className="text-center py-10 text-cortex-muted text-sm">
+                      <div className="text-3xl mb-2">⭐</div>
+                      No feedback submitted for this session yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {/* Average rating */}
+                      <div className="bg-cortex-bg border border-cortex-border rounded-xl p-4 flex items-center gap-4">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-cortex-text">{sessionFeedback.avg_rating}</div>
+                          <div className="text-[11px] text-cortex-muted mt-0.5">/ 5.0</div>
+                        </div>
+                        <div className="flex-1">
+                          {[5,4,3,2,1].map(star => {
+                            const count = sessionFeedback[`${['','one','two','three','four','five'][star]}_star`] || 0;
+                            const pct = sessionFeedback.response_count > 0 ? Math.round(count / sessionFeedback.response_count * 100) : 0;
+                            return (
+                              <div key={star} className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-cortex-muted w-4">{star}★</span>
+                                <div className="flex-1 h-2 bg-cortex-border rounded-full overflow-hidden">
+                                  <div className="h-2 bg-yellow-400 rounded-full transition-all" style={{width:`${pct}%`}} />
+                                </div>
+                                <span className="text-xs text-cortex-muted w-8 text-right">{count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="text-center text-xs text-cortex-muted">
+                          <div className="text-lg font-semibold text-cortex-text">{sessionFeedback.response_count}</div>
+                          responses
+                        </div>
+                      </div>
+
+                      {/* Comments */}
+                      {sessionFeedback.comments?.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-cortex-muted uppercase tracking-wider mb-3">Written Comments</h4>
+                          <div className="space-y-2">
+                            {JSON.parse(typeof sessionFeedback.comments === 'string' ? sessionFeedback.comments : JSON.stringify(sessionFeedback.comments)).map((c, i) => (
+                              <div key={i} className="bg-cortex-bg border border-cortex-border rounded-xl p-3.5">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <div className="w-6 h-6 rounded-full bg-cortex-accent/20 text-cortex-accent flex items-center justify-center text-xs font-bold">
+                                    {(c.user || '?')[0].toUpperCase()}
+                                  </div>
+                                  <span className="text-xs font-medium text-cortex-text">{c.user || 'Anonymous'}</span>
+                                  <span className="text-yellow-500 text-xs ml-auto">{'★'.repeat(c.rating)}</span>
+                                </div>
+                                <p className="text-sm text-cortex-text leading-relaxed">{c.comment}</p>
+                                <div className="text-[11px] text-cortex-muted mt-1">
+                                  {c.created_at ? new Date(c.created_at).toLocaleDateString('en-AE', { day:'numeric', month:'short', year:'numeric' }) : ''}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -986,15 +1071,23 @@ function TrainingSessionsInner() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-cortex-muted block mb-1.5">
-                  {form.session_mode==='online' ? 'Meeting Link (optional)' : 'Location'}
-                </label>
-                <input value={form.location} onChange={e => setForm(p=>({...p, location:e.target.value}))}
-                  className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent"
-                  placeholder={form.session_mode==='online'
-                    ? 'Zoom / Teams link, or leave blank for auto Google Meet'
-                    : 'e.g. Training Room 3, Building B'} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-cortex-muted block mb-1.5">
+                    {form.session_mode==='online' ? 'Meeting Link (optional)' : 'Location'}
+                  </label>
+                  <input value={form.location} onChange={e => setForm(p=>({...p, location:e.target.value}))}
+                    className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent"
+                    placeholder={form.session_mode==='online'
+                      ? 'Zoom / Teams link, or leave blank for auto Google Meet'
+                      : 'e.g. Training Room 3, Building B'} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-cortex-muted block mb-1.5">🏥 Facility</label>
+                  <input value={form.facility} onChange={e => setForm(p=>({...p, facility:e.target.value}))}
+                    className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent"
+                    placeholder="e.g. Main Hospital, Clinic A" />
+                </div>
               </div>
 
               <div>

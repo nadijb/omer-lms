@@ -59,7 +59,9 @@ export default function UsersPage() {
   const [filterOrg,    setFilterOrg]    = useState('');
   const [filterRole,   setFilterRole]   = useState('');
 
-  const [showBulk,      setShowBulk]      = useState(false);
+  const [showBulk,        setShowBulk]        = useState(false);
+  const [backfilling,     setBackfilling]     = useState(false);
+  const [backfillResult,  setBackfillResult]  = useState(null);
   const [selectedUsers, setSelectedUsers] = useState(new Set());
   const [showAddPw,     setShowAddPw]     = useState(false);
   const [showEditPw,    setShowEditPw]    = useState(false);
@@ -271,6 +273,17 @@ export default function UsersPage() {
     await load();
   };
 
+  const handleBackfillStaffIds = async () => {
+    setBackfilling(true); setBackfillResult(null);
+    try {
+      const r = await apiFetch('/api/lms/admin/users/backfill-staff-ids', { method: 'POST', body: '{}' });
+      const d = await r.json();
+      setBackfillResult(d);
+      if (d.updated > 0) await load();
+    } catch (err) { setBackfillResult({ error: err.message }); }
+    finally { setBackfilling(false); }
+  };
+
   const handleBulkImportUsers = async (rows, extraVals) => {
     const r = await apiFetch('/api/lms/admin/users/bulk', {
       method: 'POST',
@@ -327,7 +340,12 @@ export default function UsersPage() {
           <h1 className="text-xl font-bold text-cortex-text">User Management</h1>
           <p className="text-cortex-muted text-sm mt-0.5">Manage accounts, roles, and organisation assignments</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={handleBackfillStaffIds} disabled={backfilling}
+            title="Generate proper Staff IDs for users who have none or who have their email as Staff ID"
+            className="border border-cortex-border text-cortex-muted text-sm px-4 py-2 rounded-lg hover:text-cortex-text hover:bg-cortex-bg transition font-medium disabled:opacity-50">
+            {backfilling ? '⟳ Fixing…' : '⚙ Fix Staff IDs'}
+          </button>
           <button onClick={() => setShowBulk(true)}
             className="border border-cortex-border text-cortex-muted text-sm px-4 py-2 rounded-lg hover:text-cortex-text hover:bg-cortex-bg transition font-medium">
             ↑ Bulk Import
@@ -338,6 +356,18 @@ export default function UsersPage() {
           </button>
         </div>
       </div>
+
+      {/* Backfill result toast */}
+      {backfillResult && (
+        <div className={`flex items-center gap-3 mb-4 px-4 py-3 rounded-xl border text-sm ${
+          backfillResult.error
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+            : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
+        }`}>
+          <span className="flex-1">{backfillResult.error || backfillResult.message}</span>
+          <button onClick={() => setBackfillResult(null)} className="text-cortex-muted hover:text-cortex-text">✕</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-cortex-bg border border-cortex-border rounded-xl p-1 mb-5 w-fit">
@@ -524,15 +554,7 @@ export default function UsersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="text-xs font-medium text-cortex-muted block mb-1.5">Email *</label>
-                  <input type="email" value={addForm.email} onChange={e => {
-                    const val = e.target.value;
-                    setAddForm(p => ({
-                      ...p,
-                      email: val,
-                      // Auto-fill staff_id from email local part only if user hasn't typed one yet
-                      staff_id: p.staff_id ? p.staff_id : (val.includes('@') ? val.split('@')[0] : p.staff_id),
-                    }));
-                  }} required
+                  <input type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} required
                     className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent"
                     placeholder="user@example.com" />
                 </div>
@@ -546,7 +568,7 @@ export default function UsersPage() {
                   <label className="text-xs font-medium text-cortex-muted block mb-1.5">Staff ID</label>
                   <input value={addForm.staff_id} onChange={e => setAddForm(p => ({ ...p, staff_id: e.target.value }))}
                     className="w-full bg-cortex-bg border border-cortex-border rounded-lg px-3 py-2 text-cortex-text text-sm focus:outline-none focus:border-cortex-accent"
-                    placeholder="Auto-generated from email" />
+                    placeholder="e.g. IOH-JS-0001 (auto-generated if blank)" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-cortex-muted block mb-1.5">Password *</label>

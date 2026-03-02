@@ -18,7 +18,7 @@ export async function GET(request) {
     if (deptId)    { vals.push(deptId);    filters.push(`(u.department_id = $${vals.length} OR u.sub_department_id = $${vals.length})`); }
     const where = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
 
-    const [users, sessions, lessons, progress] = await Promise.all([
+    const [users, sessions, lessons, progress, sessionsByMonth, trainerLeaderboard, completionByLearnerType] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(*)                                                              AS total_users,
@@ -69,13 +69,81 @@ export async function GET(request) {
         JOIN auth_users u ON ulp.user_id = u.id
         ${where}
       `, vals),
+
+      // sessionsByMonth: last 12 months
+      pool.query(`
+        SELECT
+          TO_CHAR(scheduled_date, 'YYYY-MM') AS month,
+          COUNT(*)::int                       AS count
+        FROM lms_physical_sessions
+        WHERE scheduled_date >= CURRENT_DATE - INTERVAL '12 months'
+        GROUP BY month
+        ORDER BY month
+      `),
+
+      // trainerLeaderboard: top 5 trainers by session count + avg attendance %
+      pool.query(`
+        SELECT
+          COALESCE(u.display_name, u.email)               AS trainer_name,
+          COUNT(DISTINCT ps.id)::int                       AS session_count,
+          COALESCE(
+            ROUND(
+              AVG(
+                CASE WHEN pe_total.cnt > 0
+                  THEN pe_present.cnt::float / pe_total.cnt * 100
+                END
+              )
+            ), 0
+          )::int                                           AS avg_attendance_pct
+        FROM lms_physical_sessions ps
+        JOIN auth_users u ON ps.trainer_id = u.id
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS cnt FROM lms_physical_enrollments WHERE session_id = ps.id
+        ) pe_total ON true
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS cnt FROM lms_physical_enrollments
+          WHERE session_id = ps.id AND attendance_status = 'present'
+        ) pe_present ON true
+        GROUP BY u.id, u.display_name, u.email
+        ORDER BY session_count DESC
+        LIMIT 5
+      `),
+
+      // completionByLearnerType (summary)
+      pool.query(`
+        SELECT
+          lt.id                                                                      AS learner_type_id,
+          lt.name                                                                    AS learner_type_name,
+          COUNT(DISTINCT CONCAT(lp.user_id::text, '-', la.lesson_id::text))::int    AS total_assigned,
+          COUNT(DISTINCT ulp.id) FILTER (WHERE ulp.completed = true)::int           AS completed,
+          CASE
+            WHEN COUNT(DISTINCT CONCAT(lp.user_id::text, '-', la.lesson_id::text)) > 0
+            THEN ROUND(
+              COUNT(DISTINCT ulp.id) FILTER (WHERE ulp.completed = true)::numeric
+              / COUNT(DISTINCT CONCAT(lp.user_id::text, '-', la.lesson_id::text))::numeric * 100
+            )
+            ELSE 0
+          END                                                                        AS completion_pct
+        FROM lms_learner_types lt
+        LEFT JOIN lms_lesson_assignments la   ON la.learner_type_id = lt.id
+        LEFT JOIN lms_learner_profiles lp     ON lp.learner_type_id = lt.id
+        LEFT JOIN auth_users u                ON u.id = lp.user_id
+        LEFT JOIN lms_user_lesson_progress ulp
+          ON ulp.user_id = lp.user_id AND ulp.lesson_id = la.lesson_id
+        WHERE lt.is_active = true
+        GROUP BY lt.id, lt.name
+        ORDER BY lt.name
+      `),
     ]);
 
     return NextResponse.json({
-      users:    users.rows[0],
-      sessions: sessions.rows[0],
-      content:  lessons.rows[0],
-      progress: progress.rows[0],
+      users:                   users.rows[0],
+      sessions:                sessions.rows[0],
+      content:                 lessons.rows[0],
+      progress:                progress.rows[0],
+      sessionsByMonth:         sessionsByMonth.rows,
+      trainerLeaderboard:      trainerLeaderboard.rows,
+      completionByLearnerType: completionByLearnerType.rows,
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

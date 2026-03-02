@@ -321,7 +321,7 @@ export default function BulkImportModal({
           {step === 'results' && results && (
             <div className="flex-1 overflow-auto px-6 py-4">
               {/* Summary banner */}
-              <div className={`rounded-xl px-5 py-3 mb-4 flex items-center gap-3 ${
+              <div className={`rounded-xl px-5 py-3 mb-3 flex items-center gap-3 ${
                 results.succeeded === results.total
                   ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
                   : results.succeeded === 0
@@ -331,7 +331,7 @@ export default function BulkImportModal({
                 <div className="text-2xl">
                   {results.succeeded === results.total ? '✅' : results.succeeded === 0 ? '❌' : '⚠️'}
                 </div>
-                <div>
+                <div className="flex-1">
                   <div className="font-semibold text-cortex-text">
                     {results.succeeded} of {results.total} rows imported successfully
                   </div>
@@ -341,6 +341,20 @@ export default function BulkImportModal({
                     </div>
                   )}
                 </div>
+                {(results.emailsSent !== undefined) && (
+                  <div className="flex gap-2 flex-shrink-0">
+                    {results.emailsSent > 0 && (
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                        ✉ {results.emailsSent} invited
+                      </span>
+                    )}
+                    {results.emailsFailed > 0 && (
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium">
+                        ✉ {results.emailsFailed} email failed
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Per-row results */}
@@ -356,6 +370,14 @@ export default function BulkImportModal({
                       {r.success ? '✓' : '✗'}
                     </span>
                     <span className="text-cortex-muted truncate">{r.email || r.name || '—'}</span>
+                    {r.success && r.emailSent === false && (
+                      <span className="text-orange-500 text-[11px] flex-shrink-0 ml-auto">
+                        ✉ Email failed{r.emailError ? ` — ${r.emailError}` : ''}
+                      </span>
+                    )}
+                    {r.success && r.emailSent === true && (
+                      <span className="text-blue-500 text-[11px] flex-shrink-0 ml-auto">✉ Invited</span>
+                    )}
                     {!r.success && <span className="text-red-500 text-xs ml-auto flex-shrink-0">{r.error}</span>}
                   </div>
                 ))}
